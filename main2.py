@@ -579,6 +579,13 @@ if uploaded_file is not None:
                 used_groups = set(st.session_state.manual_order)
                 remaining_groups = [g for g in active_groups if g not in used_groups]
 
+                current_pos = len(st.session_state.manual_order)
+
+                # ✅ אם יש קבוצה משוריינת למיקום הזה – רק היא מותרת
+                if current_pos in fixed_positions:
+                    forced_group = fixed_positions[current_pos]
+                    remaining_groups = [forced_group] if forced_group in remaining_groups else []
+
                 invalid_by_gap = set()
                 if len(st.session_state.manual_order) > 0:
                     lookback = min(len(st.session_state.manual_order), gap_size)
