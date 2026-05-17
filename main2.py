@@ -67,7 +67,7 @@ def build_data_structures(df):
 
 
 # אלגוריתם Backtracking לאפשרות 1 (חיפוש פתרונות אוטומטיים)
-def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions=100):
+def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions):
     if not remaining:
         if not end_groups or current[-1] in end_groups:
             return [current.copy()]
@@ -187,14 +187,14 @@ if uploaded_file is not None:
                         for start_g in starts_to_try:
                             remaining = set(all_groups) - {start_g}
                             current = [start_g]
-                            res = find_schedules(remaining, current, gap_size, conflict_matrix, set(end_groups))
+                            res = find_schedules(remaining, current, gap_size, conflict_matrix, set(end_groups), max_solutions)
                             solutions.extend(res)
-                            if len(solutions) >= 5:
+                            if len(solutions) >= max_solutions:
                                 break
 
                     if solutions:
-                        st.success(f"נמצאו {len(solutions[:5])} סדרי עלייה אפשריים העונים על האילוצים:")
-                        for idx, sol in enumerate(solutions[:5]):
+                        st.success(f"נמצאו {len(solutions[:max_solutions])} סדרי עלייה אפשריים העונים על האילוצים:")
+                        for idx, sol in enumerate(solutions[:max_solutions]):
                             st.markdown(f"**אופציה {idx + 1}:**")
                             st.code(" ⬅️ ".join(sol))
                     else:
