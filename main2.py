@@ -183,12 +183,12 @@ if uploaded_file is not None:
                             current = [start_g]
                             res = find_schedules(remaining, current, gap_size, conflict_matrix, set(end_groups))
                             solutions.extend(res)
-                            if len(solutions) >= 5:
+                            if len(solutions) >= 100:
                                 break
 
                     if solutions:
-                        st.success(f"נמצאו {len(solutions[:5])} סדרי עלייה אפשריים העונים על האילוצים:")
-                        for idx, sol in enumerate(solutions[:5]):
+                        st.success(f"נמצאו {len(solutions[:100])} סדרי עלייה אפשריים העונים על האילוצים:")
+                        for idx, sol in enumerate(solutions[:100]):
                             st.markdown(f"**אופציה {idx + 1}:**")
                             st.code(" ⬅️ ".join(sol))
                     else:
