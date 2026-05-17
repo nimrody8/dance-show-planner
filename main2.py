@@ -27,6 +27,12 @@ uploaded_file = st.sidebar.file_uploader("העלאת קובץ אקסל (XLSX)", 
 
 # משתני הגדרה דינמיים
 gap_size = st.sidebar.number_input("מרווח מינימלי נדרש (מספר ריקודים באמצע)", min_value=1, max_value=5, value=2)
+max_solutions = st.sidebar.slider(
+    "מספר פתרונות מקסימלי להצגה",
+    min_value=1,
+    max_value=500,
+    value=100
+)
 
 
 # --- פונקציות עזר ללוגיקה ---
