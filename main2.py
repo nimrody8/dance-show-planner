@@ -67,15 +67,24 @@ def build_data_structures(df):
 
 
 # אלגוריתם Backtracking לאפשרות 1 (חיפוש פתרונות אוטומטיים)
-def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions):
+def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions, fixed_positions):
+    pos = len(current)
+
     if not remaining:
         if not end_groups or current[-1] in end_groups:
             return [current.copy()]
         return []
 
     solutions = []
-    for g in list(remaining):
-        # בדיקת אילוץ מרווח
+
+    # ✅ יש קבוצה קבועה למיקום הזה
+    if pos in fixed_positions:
+        g = fixed_positions[pos]
+
+        if g not in remaining:
+            return []
+
+        # בדיקת מרווח
         valid = True
         lookback = min(len(current), gap)
         for i in range(1, lookback + 1):
@@ -83,15 +92,49 @@ def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions
                 valid = False
                 break
 
-        # בדיקת אילוץ קבוצת סיום (אם זה האיבר האחרון שנשאר)
-        if valid and len(remaining) == 1 and end_groups and g not in end_groups:
-            valid = False
+        if valid:
+            current.append(g)
+            remaining.remove(g)
+
+            res = find_schedules(
+                remaining,
+                current,
+                gap,
+                conflicts,
+                end_groups,
+                max_solutions,
+                fixed_positions
+            )
+            solutions.extend(res)
+
+            remaining.add(g)
+            current.pop()
+
+        return solutions
+
+    # ✅ אין אילוץ → רגיל
+    for g in list(remaining):
+        valid = True
+
+        lookback = min(len(current), gap)
+        for i in range(1, lookback + 1):
+            if g in conflicts.get(current[-i], set()):
+                valid = False
+                break
 
         if valid:
             current.append(g)
             remaining.remove(g)
 
-            res = find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions)
+            res = find_schedules(
+                remaining,
+                current,
+                gap,
+                conflicts,
+                end_groups,
+                max_solutions,
+                fixed_positions
+            )
             solutions.extend(res)
 
             remaining.add(g)
@@ -99,6 +142,7 @@ def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions
 
             if len(solutions) >= max_solutions:
                 return solutions[:max_solutions]
+
     return solutions
 
 
@@ -154,6 +198,40 @@ if uploaded_file is not None:
             start_groups = st.sidebar.multiselect("קבוצות שחייבות לפתוח את המופע:", options=all_groups)
             end_groups = st.sidebar.multiselect("קבוצות שחייבות לסיים את המופע:", options=all_groups)
 
+            st.sidebar.subheader("📌 שריון מיקומים ספציפיים")
+
+            fixed_positions = {}
+
+            num_fixed = st.sidebar.number_input(
+                "כמה מיקומים קבועים להגדיר?",
+                min_value=0,
+                max_value=len(all_groups),
+                value=0
+            )
+
+            for i in range(num_fixed):
+                col1, col2 = st.sidebar.columns(2)
+
+                with col1:
+                    group = st.selectbox(
+                        f"קבוצה {i + 1}",
+                        options=all_groups,
+                        key=f"fixed_group_{i}"
+                    )
+
+                with col2:
+                    position = st.number_input(
+                        f"מיקום {i + 1}",
+                        min_value=1,
+                        max_value=len(all_groups),
+                        key=f"fixed_pos_{i}"
+                    )
+
+                fixed_positions[position - 1] = group  # 0-based index
+
+            if len(set(fixed_positions.values())) != len(fixed_positions):
+                st.sidebar.error("⚠️ בחרת אותה קבוצה פעמיים במיקומים שונים")
+
             # טאבים לחלוקת התצוגה
             tab_report, tab_auto, tab_manual = st.tabs([
                 "📊 דוח חפיפות ונתונים",
@@ -182,24 +260,91 @@ if uploaded_file is not None:
                 if st.button("🚀 ג'נרס סדרי עלייה אפשריים"):
                     solutions = []
                     starts_to_try = start_groups if start_groups else all_groups
+                    if 0 in fixed_positions:
+                        starts_to_try = [fixed_positions[0]]
 
                     with st.spinner("מחשב פתרונות אופטימליים..."):
                         for start_g in starts_to_try:
                             remaining = set(all_groups) - {start_g}
                             current = [start_g]
-                            res = find_schedules(remaining, current, gap_size, conflict_matrix, set(end_groups), max_solutions)
+
+                            res = find_schedules(
+                                remaining,
+                                current,
+                                gap_size,
+                                conflict_matrix,
+                                set(end_groups),
+                                max_solutions,
+                                fixed_positions
+                            )
+
                             solutions.extend(res)
                             if len(solutions) >= max_solutions:
                                 break
 
                     if solutions:
-                        st.success(f"נמצאו {len(solutions[:max_solutions])} סדרי עלייה אפשריים העונים על האילוצים:")
-                        for idx, sol in enumerate(solutions[:max_solutions]):
-                            st.markdown(f"**אופציה {idx + 1}:**")
-                            st.code(" ⬅️ ".join(sol))
+                        st.session_state.auto_solutions = solutions[:max_solutions]
+
+                        st.success(f"נמצאו {len(st.session_state.auto_solutions)} סדרי עלייה אפשריים:")
+
+                        for idx, sol in enumerate(st.session_state.auto_solutions):
+                            col1, col2 = st.columns([4, 1])
+
+                            with col1:
+                                st.markdown(f"**אופציה {idx + 1}:**")
+
+                                st.markdown(
+                                    f"""
+                                    <div dir="rtl" style="
+                                        overflow-x: auto;
+                                        white-space: nowrap;
+                                        border: 1px solid #ddd;
+                                        padding: 8px;
+                                        border-radius: 6px;
+                                        background-color: #f6f8fa;
+                                        font-family: monospace;
+                                    ">
+                                        {" ⬅️ ".join(sol)}
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                            with col2:
+                                excel_data = generate_excel_download(sol, group_students)
+
+                                st.download_button(
+                                    label="⬇️ אקסל",
+                                    data=excel_data,
+                                    file_name=f"סדר_הופעות_אופציה_{idx + 1}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"download_auto_{idx}"
+                                )
                     else:
-                        st.error(
-                            "❌ לא נמצא סדר עלייה חוקי שעונה על כל האילוצים במלואם. מומלץ להשתמש בשיבוץ הידני החכם כדי לעקוף אילוצים במידת הצורך.")
+                        st.error("❌ לא נמצא סדר חוקי...")
+                    # -------- בחירת אופציה וייצוא --------
+                if 'auto_solutions' in st.session_state and st.session_state.auto_solutions:
+                    st.markdown("### 🎯 בחר אופציה לייצוא")
+
+                    selected_index = st.selectbox(
+                        "בחר אופציה:",
+                        options=list(range(len(st.session_state.auto_solutions))),
+                        format_func=lambda i: f"אופציה {i + 1}"
+                    )
+
+                    selected_solution = st.session_state.auto_solutions[selected_index]
+
+                    st.info(" ⬅️ ".join(selected_solution))
+
+                    excel_data_auto = generate_excel_download(selected_solution, group_students)
+
+                    st.download_button(
+                        label="📥 יצא אקסל לפי האופציה שנבחרה",
+                        data=excel_data_auto,
+                        file_name=f"סדר_הופעות_אופציה_{selected_index + 1}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_auto_excel"
+                    )
 
             # --- טאב 3: שיבוץ ידני חכם ---
             with tab_manual:
