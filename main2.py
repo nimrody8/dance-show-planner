@@ -143,7 +143,7 @@ def find_schedules(
                 return solutions[:max_solutions]
 
     return solutions[:max_solutions]
-
+)
 
 # פונקציה לייצוא סדר ההופעות לקובץ אקסל במבנה המבוקש
 def generate_excel_download(order, group_students):
