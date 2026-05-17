@@ -27,6 +27,12 @@ uploaded_file = st.sidebar.file_uploader("העלאת קובץ אקסל (XLSX)", 
 
 # משתני הגדרה דינמיים
 gap_size = st.sidebar.number_input("מרווח מינימלי נדרש (מספר ריקודים באמצע)", min_value=1, max_value=5, value=2)
+max_solutions = st.sidebar.slider(
+    "מספר פתרונות מקסימלי",
+    min_value=1,
+    max_value=500,
+    value=100
+)
 
 
 # --- פונקציות עזר ללוגיקה ---
@@ -61,31 +67,73 @@ def build_data_structures(df):
 
 
 # אלגוריתם Backtracking לאפשרות 1 (חיפוש פתרונות אוטומטיים)
-def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions=100):
-    if not remaining:
-        if not end_groups or current[-1] in end_groups:
-            return [current.copy()]
-        return []
+def find_schedules(
+            remaining.remove(forced_group)
 
-    solutions = []
-    for g in list(remaining):
-        # בדיקת אילוץ מרווח
+            res = find_schedules(
+                remaining,
+                current,
+                gap,
+                conflicts,
+                end_groups,
+                fixed_positions,
+                total_length,
+                max_solutions
+            )
+
+            solutions.extend(res)
+
+            remaining.add(forced_group)
+            current.pop()
+
+        return solutions[:max_solutions]
+
+    # ---------------------------------
+    # בחירה רגילה
+    # ---------------------------------
+
+    candidate_groups = sorted(
+        remaining,
+        key=lambda x: len(conflicts.get(x, set())),
+        reverse=True
+    )
+
+    for g in candidate_groups:
+
         valid = True
+
+        # בדיקת אילוץ מרווח
         lookback = min(len(current), gap)
+
         for i in range(1, lookback + 1):
             if g in conflicts.get(current[-i], set()):
                 valid = False
                 break
 
-        # בדיקת אילוץ קבוצת סיום (אם זה האיבר האחרון שנשאר)
-        if valid and len(remaining) == 1 and end_groups and g not in end_groups:
+        # בדיקת אילוץ סיום
+        if (
+            valid and
+            len(current) == total_length - 1 and
+            end_groups and
+            g not in end_groups
+        ):
             valid = False
 
         if valid:
             current.append(g)
             remaining.remove(g)
 
-            res = find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions)
+            res = find_schedules(
+                remaining,
+                current,
+                gap,
+                conflicts,
+                end_groups,
+                fixed_positions,
+                total_length,
+                max_solutions
+            )
+
             solutions.extend(res)
 
             remaining.add(g)
@@ -93,7 +141,8 @@ def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions
 
             if len(solutions) >= max_solutions:
                 return solutions[:max_solutions]
-    return solutions
+
+    return solutions[:max_solutions]
 
 
 # פונקציה לייצוא סדר ההופעות לקובץ אקסל במבנה המבוקש
@@ -147,13 +196,8 @@ if uploaded_file is not None:
             st.sidebar.subheader("🎯 אילוצי קבוצות מיוחדות")
             start_groups = st.sidebar.multiselect("קבוצות שחייבות לפתוח את המופע:", options=all_groups)
             end_groups = st.sidebar.multiselect("קבוצות שחייבות לסיים את המופע:", options=all_groups)
-
-            # טאבים לחלוקת התצוגה
-            tab_report, tab_auto, tab_manual = st.tabs([
-                "📊 דוח חפיפות ונתונים",
-                "🤖 אופציה 1: גנרציה אוטומטית",
-                "✍️ אופציה 2: שיבוץ ידני חכם"
-            ])
+            # -----------------------------
+            
 
             # --- טאב 1: דוח חפיפות ---
             with tab_report:
@@ -173,24 +217,89 @@ if uploaded_file is not None:
                 st.subheader("ייצור אוטומטי של סדרי עלייה אפשריים")
                 st.write("האלגוריתם ינסה למצוא סידורים שעומדים בכל האילוצים שהגדרת (מרווחים, פתיחה וסיום).")
 
-                if st.button("🚀 ג'נרס סדרי עלייה אפשריים"):
-                    solutions = []
-                    starts_to_try = start_groups if start_groups else all_groups
-
-                    with st.spinner("מחשב פתרונות אופטימליים..."):
-                        for start_g in starts_to_try:
+            if st.button("🚀 צור סדרי עלייה אפשריים"):
+            
+                solutions = []
+            
+                with st.spinner("מחשב פתרונות אופטימליים..."):
+            
+                    # ---------------------------------
+                    # התחלה ממיקומים קבועים
+                    # ---------------------------------
+            
+                    initial_current = []
+                    initial_remaining = set(all_groups)
+            
+                    # אם המקום הראשון מקובע
+                    if 0 in fixed_positions:
+                        first_group = fixed_positions[0]
+            
+                        if start_groups and first_group not in start_groups:
+                            st.error("❌ הקבוצה המקובעת למקום הראשון אינה מותרת כקבוצת פתיחה")
+                            st.stop()
+            
+                        initial_current.append(first_group)
+                        initial_remaining.remove(first_group)
+            
+                    else:
+                        # אחרת ננסה את כל אפשרויות הפתיחה
+                        possible_starts = start_groups if start_groups else all_groups
+            
+                        for start_g in possible_starts:
+            
                             remaining = set(all_groups) - {start_g}
                             current = [start_g]
-                            res = find_schedules(remaining, current, gap_size, conflict_matrix, set(end_groups))
+            
+                            res = find_schedules(
+                                remaining=remaining,
+                                current=current,
+                                gap=gap_size,
+                                conflicts=conflict_matrix,
+                                end_groups=set(end_groups),
+                                fixed_positions=fixed_positions,
+                                total_length=len(all_groups),
+                                max_solutions=max_solutions
+                            )
+            
                             solutions.extend(res)
-                            if len(solutions) >= 100:
+            
+                            if len(solutions) >= max_solutions:
                                 break
 
-                    if solutions:
-                        st.success(f"נמצאו {len(solutions[:100])} סדרי עלייה אפשריים העונים על האילוצים:")
-                        for idx, sol in enumerate(solutions[:100]):
-                            st.markdown(f"**אופציה {idx + 1}:**")
-                            st.code(" ⬅️ ".join(sol))
+        # אם יש מקום ראשון מקובע
+        if initial_current:
+
+            res = find_schedules(
+                remaining=initial_remaining,
+                current=initial_current,
+                gap=gap_size,
+                conflicts=conflict_matrix,
+                end_groups=set(end_groups),
+                fixed_positions=fixed_positions,
+                total_length=len(all_groups),
+                max_solutions=max_solutions
+            )
+
+            solutions.extend(res)
+
+            if solutions:
+            
+                unique_solutions = []
+                seen = set()
+            
+                for sol in solutions:
+                    t = tuple(sol)
+                    if t not in seen:
+                        seen.add(t)
+                        unique_solutions.append(sol)
+            
+                st.success(
+                    f"נמצאו {len(unique_solutions[:max_solutions])} סדרי עלייה אפשריים"
+                )
+            
+                for idx, sol in enumerate(unique_solutions[:max_solutions]):
+                    st.markdown(f"### אופציה {idx + 1}")
+                    st.code(" ⬅️ ".join(sol))
                     else:
                         st.error(
                             "❌ לא נמצא סדר עלייה חוקי שעונה על כל האילוצים במלואם. מומלץ להשתמש בשיבוץ הידני החכם כדי לעקוף אילוצים במידת הצורך.")
