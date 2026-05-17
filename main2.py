@@ -61,7 +61,7 @@ def build_data_structures(df):
 
 
 # אלגוריתם Backtracking לאפשרות 1 (חיפוש פתרונות אוטומטיים)
-def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions=5):
+def find_schedules(remaining, current, gap, conflicts, end_groups, max_solutions=100):
     if not remaining:
         if not end_groups or current[-1] in end_groups:
             return [current.copy()]
