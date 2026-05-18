@@ -312,7 +312,7 @@ if uploaded_file is not None:
                 st.subheader("ייצור אוטומטי של סדרי עלייה אפשריים")
                 st.write("האלגוריתם ינסה למצוא סידורים שעומדים בכל האילוצים שהגדרת.")
 
-                generate_clicked = st.button("🚀 ג'נרס סדרי עלייה אפשריים (יחושב רק בלחיצה)")
+                generate_clicked = st.button("🚀 סדר אוטומטית (יחושב רק בלחיצה)")
 
                 if generate_clicked:
                     if st.session_state.get("invalid_fixed"):
