@@ -63,15 +63,11 @@ div[style*="overflow-x"] {
 
 st.title("מופע סוף שנה - אופטימיזציית סדר עלייה 🩰")
 
-# --- אתחול דינמי של ה-State (חובה עבור חיבור מפתחות לווידג'טים) ---
+# --- אתחול בסיסי של ה-Session State ---
 if 'manual_order' not in st.session_state:
     st.session_state.manual_order = []
-if 'gap_size' not in st.session_state:
-    st.session_state.gap_size = 2
-if 'max_solutions' not in st.session_state:
-    st.session_state.max_solutions = 100
-if 'num_fixed' not in st.session_state:
-    st.session_state.num_fixed = 0
+if 'loaded_configs' not in st.session_state:
+    st.session_state.loaded_configs = {}
 
 # --- פונקציות עזר ללוגיקה ושמירת מצב ---
 def validate_excel(df):
@@ -80,9 +76,10 @@ def validate_excel(df):
     return missing_cols
 
 def serialize_state():
-    """אוסף את כל הנתונים הנוכחיים מה-Session State ומכין קובץ JSON להורדה"""
+    """אוסף את כל הנתונים מהווידג'טים והמערך ושומר לקובץ JSON"""
     current_fixed = {}
-    for i in range(st.session_state.get("num_fixed", 0)):
+    num_fixed = st.session_state.get("num_fixed_input", 0)
+    for i in range(num_fixed):
         g = st.session_state.get(f"fixed_group_{i}")
         p = st.session_state.get(f"fixed_pos_{i}")
         if g and p:
@@ -90,38 +87,23 @@ def serialize_state():
 
     data = {
         "manual_order": st.session_state.get("manual_order", []),
-        "gap_size": st.session_state.get("gap_size", 2),
-        "max_solutions": st.session_state.get("max_solutions", 100),
-        "selected_groups": st.session_state.get("selected_groups", []),
-        "start_groups": st.session_state.get("start_groups", []),
-        "end_groups": st.session_state.get("end_groups", []),
+        "gap_size": st.session_state.get("gap_size_input", 2),
+        "max_solutions": st.session_state.get("max_solutions_input", 100),
+        "selected_groups": st.session_state.get("selected_groups_input", []),
+        "start_groups": st.session_state.get("start_groups_input", []),
+        "end_groups": st.session_state.get("end_groups_input", []),
         "fixed_positions": current_fixed
     }
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 def load_state_callback():
-    """פונקציית קולבק שרצה אך ורק ברגע העלאת קובץ הסטייט ומונעת נעילה"""
+    """קריאת קובץ ה-JSON בצורה בטוחה לתוך מילון אחסון זמני כדי למנוע לולאות Rerun"""
     if st.session_state.load_state_file is not None:
         try:
             data = json.load(st.session_state.load_state_file)
-            
-            # טעינת משתנים פשוטים לרמת האפליקציה
+            st.session_state.loaded_configs = data
             st.session_state.manual_order = data.get("manual_order", [])
-            st.session_state.gap_size = data.get("gap_size", 2)
-            st.session_state.max_solutions = data.get("max_solutions", 100)
-            st.session_state.selected_groups = data.get("selected_groups", [])
-            st.session_state.start_groups = data.get("start_groups", [])
-            st.session_state.end_groups = data.get("end_groups", [])
-            
-            # טעינת המיקומים המשוריינים הדינמיים
-            saved_fixed = data.get("fixed_positions", {})
-            st.session_state.num_fixed = len(saved_fixed)
-            
-            for idx, (pos_str, group) in enumerate(saved_fixed.items()):
-                st.session_state[f"fixed_group_{idx}"] = group
-                st.session_state[f"fixed_pos_{idx}"] = int(pos_str) + 1  # המרה חזרה מאינדקס 0 למיקום אנושי (1 ומעלה)
-                
-            st.toast("✅ מצב קודם נטען בהצלחה!", icon="💾")
+            st.toast("✅ נתוני הקובץ הועלו! ההגדרות מעודכנות בסרגל הצד.", icon="💾")
         except Exception as e:
             st.sidebar.error(f"שגיאה בקריאת קובץ המצב: {e}")
 
@@ -221,13 +203,17 @@ st.sidebar.header("⚙️ הגדרות והעלאת נתונים")
 
 uploaded_file = st.sidebar.file_uploader("העלאת קובץ אקסל (XLSX)", type=["xlsx"])
 
-# הגדרות מחוברות ל-Session State
-gap_size = st.sidebar.number_input("מרווח מינימלי נדרש (מספר ריקודים באמצע)", min_value=1, max_value=5, key="gap_size")
-max_solutions = st.sidebar.number_input("מספר פתרונות מקסימלי להצגה", min_value=1, max_value=500, key="max_solutions")
+# שליפת ערכים שנטענו מהקובץ (אם קיימים) בצורה בטוחה
+saved_cfg = st.session_state.loaded_configs
+default_gap = saved_cfg.get("gap_size", 2)
+default_max_sol = saved_cfg.get("max_solutions", 100)
+
+gap_size = st.sidebar.number_input("מרווח מינימלי נדרש (מספר ריקודים באמצע)", min_value=1, max_value=5, value=int(default_gap), key="gap_size_input")
+max_solutions = st.sidebar.number_input("מספר פתרונות מקסימלי להצגה", min_value=1, max_value=500, value=int(default_max_sol), key="max_solutions_input")
 
 st.sidebar.subheader("💾 שמירה וטעינה")
 
-# שמירת המצב הנוכחי המלא לקובץ JSON
+# כפתור הורדת הסטייט הנוכחי
 st.sidebar.download_button(
     label="📥 שמור מצב מלא",
     data=serialize_state(),
@@ -235,8 +221,8 @@ st.sidebar.download_button(
     mime="application/json"
 )
 
-# טעינת המצב באמצעות מנגנון קולבק (Callback) שלא נועל את האפליקציה
-uploaded_state = st.sidebar.file_uploader(
+# העלאת קובץ הסטייט שמפעיל קולבק ייעודי פעם אחת בלבד
+st.sidebar.file_uploader(
     "📤 טען מצב קודם",
     type=["json"],
     key="load_state_file",
@@ -248,11 +234,10 @@ uploaded_state = st.sidebar.file_uploader(
 if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
-
         missing = validate_excel(df)
+        
         if missing:
             st.error(f"❌ הקובץ אינו תקין! העמודות הבאות חסרות: {', '.join(missing)}")
-            st.info("אנא ודא שהעמודות באקסל הן בדיוק: 'שם תלמידה', 'שם משפחה', 'גיל', 'קבוצה'")
         else:
             st.success("✅ הקובץ נטען ונבדק בהצלחה!")
 
@@ -261,47 +246,57 @@ if uploaded_file is not None:
 
             st.sidebar.subheader("🎭 בחירת ריקודים למופע")
 
-            # הגנה וניקוי במקרה ונטען קובץ הגדרות לא תואם
-            if "selected_groups" in st.session_state and st.session_state.selected_groups:
-                st.session_state.selected_groups = [g for g in st.session_state.selected_groups if g in all_groups]
-            else:
-                st.session_state.selected_groups = all_groups
+            # הגדרת קבוצות ברירת מחדל על בסיס קובץ שנשמר או כל הקבוצות
+            saved_selected = saved_cfg.get("selected_groups", all_groups)
+            default_selected = [g for g in saved_selected if g in all_groups] if saved_selected else all_groups
 
             selected_groups = st.sidebar.multiselect(
                 "בחר אילו קבוצות ישתתפו:",
                 options=all_groups,
-                key="selected_groups"
+                default=default_selected,
+                key="selected_groups_input"
             )
 
             active_groups = selected_groups if selected_groups else all_groups
 
             st.sidebar.subheader("🎯 אילוצי קבוצות מיוחדות")
             
-            if "start_groups" in st.session_state and st.session_state.start_groups:
-                st.session_state.start_groups = [g for g in st.session_state.start_groups if g in active_groups]
-            if "end_groups" in st.session_state and st.session_state.end_groups:
-                st.session_state.end_groups = [g for g in st.session_state.end_groups if g in active_groups]
+            saved_starts = saved_cfg.get("start_groups", [])
+            default_starts = [g for g in saved_starts if g in active_groups]
+            
+            saved_ends = saved_cfg.get("end_groups", [])
+            default_ends = [g for g in saved_ends if g in active_groups]
 
-            start_groups = st.sidebar.multiselect("קבוצות שחייבות לפתוח את המופע:", options=active_groups, key="start_groups")
-            end_groups = st.sidebar.multiselect("קבוצות שחייבות לסיים את המופע:", options=active_groups, key="end_groups")
+            start_groups = st.sidebar.multiselect("קבוצות שחייבות לפתוח את המופע:", options=active_groups, default=default_starts, key="start_groups_input")
+            end_groups = st.sidebar.multiselect("קבוצות שחייבות לסיים את המופע:", options=active_groups, default=default_ends, key="end_groups_input")
 
             st.sidebar.subheader("📌 שריון מיקומים ספציפיים")
+
+            saved_fixed_positions = saved_cfg.get("fixed_positions", {})
+            default_num_fixed = len(saved_fixed_positions)
 
             num_fixed = st.sidebar.number_input(
                 "כמה מיקומים קבועים להגדיר?",
                 min_value=0,
                 max_value=len(active_groups),
-                key="num_fixed"
+                value=int(default_num_fixed),
+                key="num_fixed_input"
             )
 
             fixed_positions = {}
             for i in range(num_fixed):
                 col1, col2 = st.sidebar.columns(2)
+                
+                # שליפת ערך קודם עבור האינדקס הנוכחי אם קיים בקובץ השמור
+                saved_pos_key = list(saved_fixed_positions.keys())[i] if i < len(saved_fixed_positions) else None
+                saved_group_val = saved_fixed_positions[saved_pos_key] if saved_pos_key else active_groups[0]
+                saved_pos_val = int(saved_pos_key) + 1 if saved_pos_key else i + 1
 
                 with col1:
                     group = st.selectbox(
                         f"קבוצה {i + 1}",
                         options=active_groups,
+                        index=active_groups.index(saved_group_val) if saved_group_val in active_groups else 0,
                         key=f"fixed_group_{i}"
                     )
 
@@ -310,46 +305,21 @@ if uploaded_file is not None:
                         f"מיקום {i + 1}",
                         min_value=1,
                         max_value=len(active_groups),
+                        value=int(saved_pos_val),
                         key=f"fixed_pos_{i}"
                     )
 
-                fixed_positions[position - 1] = group  # 0-based index
+                fixed_positions[position - 1] = group
 
             st.session_state.invalid_fixed = False
 
             if start_groups and 0 in fixed_positions:
                 fixed_first = fixed_positions[0]
                 if fixed_first not in start_groups:
-                    st.sidebar.error(
-                        f"❌ קונפליקט: הקבוצה '{fixed_first}' משובצת במקום הראשון, "
-                        f"אבל רק {start_groups} יכולות לפתוח את המופע"
-                    )
+                    st.sidebar.error(f"❌ קונפליקט: הקבוצה '{fixed_first}' משובצת במקום הראשון, אך אינה ברשימת הפתיחה.")
                     st.session_state.invalid_fixed = True
 
-            for pos1, group1 in fixed_positions.items():
-                for pos2, group2 in fixed_positions.items():
-                    if pos1 >= pos2:
-                        continue
-
-                    distance = abs(pos1 - pos2) - 1
-                    if distance < gap_size:
-                        if group2 in conflict_matrix.get(group1, set()):
-                            st.sidebar.error(
-                                f"❌ קונפליקט: '{group1}' (מקום {pos1 + 1}) "
-                                f"לא יכולה להיות קרובה ל '{group2}' (מקום {pos2 + 1}) "
-                                f"בגלל חפיפת רקדניות"
-                            )
-                            st.session_state.invalid_fixed = True
-
-            if len(set(fixed_positions.values())) != len(fixed_positions):
-                st.sidebar.error("⚠️ בחרת אותה קבוצה פעמיים במיקומים שונים")
-
-            current_config = (
-                tuple(start_groups),
-                tuple(end_groups),
-                tuple(sorted(fixed_positions.items())),
-                gap_size
-            )
+            current_config = (tuple(start_groups), tuple(end_groups), tuple(sorted(fixed_positions.items())), gap_size)
 
             # טאבים לחלוקת התצוגה
             tab_report, tab_auto, tab_manual = st.tabs([
@@ -358,16 +328,14 @@ if uploaded_file is not None:
                 "✍️ אופציה 2: שיבוץ ידני חכם"
             ])
 
-            # --- טאב 1: דוח חפיפות (מציג ומסנן רק לפי הקבוצות שנבחרו במופע) ---
+            # --- טאב 1: דוח חפיפות (מסונן דינמית) ---
             with tab_report:
                 st.subheader("ריקודים שלא יכולים להיות חופפים (חולקים רקדניות):")
                 conflict_data = []
-                active_set = set(active_groups)  # הגדרת סט של הקבוצות הפעילות לטובת סינון מהיר
+                active_set = set(active_groups)
 
                 for group, item in conflict_matrix.items():
-                    # מציג קבוצה רק אם היא נבחרה להשתתף במופע
                     if group in active_set:
-                        # מסנן את רשימת הקונפליקטים שלה, כך שיופיעו רק קבוצות שגם משתתפות במופע
                         active_conflicts = item.intersection(active_set)
                         if active_conflicts:
                             conflict_data.append({
@@ -377,109 +345,80 @@ if uploaded_file is not None:
 
                 if conflict_data:
                     df_conflicts = pd.DataFrame(conflict_data)
-                    df_conflicts = df_conflicts[df_conflicts.columns[::-1]]  # היפוך סדר העמודות ל-RTL
+                    df_conflicts = df_conflicts[df_conflicts.columns[::-1]]
                     st.dataframe(df_conflicts, use_container_width=True)
                 else:
-                    st.write("אין אף חפיפה בין הקבוצות שנבחרו! (כל תלמידה רוקדת רק בריקוד אחד מתוך הרשימה שנבחרה)")
+                    st.write("אין אף חפיפה בין הקבוצות שנבחרו!")
 
-            # --- טאב 2: גנרציה אוטומטית ---
+            # --- טאב 2: גנרציה אוטומטית (תיקון רוחב העמודה ומתיחה מלאה) ---
             with tab_auto:
                 st.subheader("ייצור אוטומטי של סדרי עלייה אפשריים")
-                st.write("האלגוריתם ינסה למצוא סידורים שעומדים בכל האילוצים שהגדרת (מרווחים, פתיחה וסיום).")
-
-                auto_run = False
-                if "last_config" not in st.session_state:
-                    st.session_state.last_config = current_config
-
-                if st.session_state.last_config != current_config:
-                    auto_run = True
-                    st.session_state.last_config = current_config
+                st.write("האלגוריתם ינסה למצוא סידורים שעומדים בכל האילוצים שהגדרת.")
 
                 generate_clicked = st.button("🚀 ג'נרס סדרי עלייה אפשריים")
 
-                if generate_clicked or auto_run:
+                if generate_clicked:
                     if st.session_state.get("invalid_fixed"):
                         st.error("❌ יש קונפליקט בהגדרות — תקן לפני הרצה")
-                        st.stop()
-
-                    solutions = []
-                    starts_to_try = start_groups if start_groups else active_groups
-                    if 0 in fixed_positions:
-                        starts_to_try = [fixed_positions[0]]
-
-                    with st.spinner("מחשב פתרונות אופטימליים..."):
-                        for start_g in starts_to_try:
-                            remaining = set(active_groups) - {start_g}
-                            current = [start_g]
-
-                            res = find_schedules(
-                                remaining,
-                                current,
-                                gap_size,
-                                conflict_matrix,
-                                set(end_groups),
-                                max_solutions,
-                                fixed_positions
-                            )
-                            solutions.extend(res)
-                            if len(solutions) >= max_solutions:
-                                break
-
-                    if solutions:
-                        st.session_state.auto_solutions = solutions[:max_solutions]
-                        st.success(f"נמצאו {len(st.session_state.auto_solutions)} סדרי עלייה אפשריים:")
-
-                        for idx, sol in enumerate(st.session_state.auto_solutions):
-                            col1, col2 = st.columns([1, 4])
-                            with col1:
-                                st.markdown(f"**אופציה {idx + 1}:**")
-                                st.markdown(
-                                    f"""
-                                    <div dir="rtl" style="
-                                        overflow-x: auto;
-                                        white-space: nowrap;
-                                        border: 1px solid #ddd;
-                                        padding: 8px;
-                                        border-radius: 6px;
-                                        background-color: #f6f8fa;
-                                        font-family: monospace;
-                                    ">
-                                        {" ⬅️ ".join(sol)}
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-                            with col2:
-                                excel_data = generate_excel_download(sol, group_students)
-                                st.download_button(
-                                    label="⬇️ אקסל",
-                                    data=excel_data,
-                                    file_name=f"סדר_הופעות_אופציה_{idx + 1}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key=f"download_auto_{idx}"
-                                )
                     else:
-                        st.session_state.auto_solutions = []
-                        st.error("❌ לא נמצא סדר חוקי שמקיים את כל התנאים...")
+                        solutions = []
+                        starts_to_try = start_groups if start_groups else active_groups
+                        if 0 in fixed_positions:
+                            starts_to_try = [fixed_positions[0]]
 
-                if st.session_state.get("auto_solutions") and len(st.session_state.auto_solutions) > 0:
-                    st.markdown("### 🎯 בחר אופציה לייצוא")
-                    selected_index = st.selectbox(
-                        "בחר אופציה:",
-                        options=list(range(len(st.session_state.auto_solutions))),
-                        format_func=lambda i: f"אופציה {i + 1}"
-                    )
-                    selected_solution = st.session_state.auto_solutions[selected_index]
-                    st.info(" ⬅️ ".join(selected_solution))
+                        with st.spinner("מחשב פתרונות אופטימליים..."):
+                            for start_g in starts_to_try:
+                                remaining = set(active_groups) - {start_g}
+                                current = [start_g]
 
-                    excel_data_auto = generate_excel_download(selected_solution, group_students)
-                    st.download_button(
-                        label="📥 יצא אקסל לפי האופציה שנבחרה",
-                        data=excel_data_auto,
-                        file_name=f"סדר_הופעות_אופציה_{selected_index + 1}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_auto_excel"
-                    )
+                                res = find_schedules(
+                                    remaining, current, gap_size, conflict_matrix,
+                                    set(end_groups), max_solutions, fixed_positions
+                                )
+                                solutions.extend(res)
+                                if len(solutions) >= max_solutions:
+                                    break
+
+                        if solutions:
+                            st.session_state.auto_solutions = solutions[:max_solutions]
+                            st.success(f"נמצאו {len(st.session_state.auto_solutions)} סדרי עלייה אפשריים:")
+                        else:
+                            st.session_state.auto_solutions = []
+                            st.error("❌ לא נמצא סדר חוקי שמקיים את כל התנאים...")
+
+                if "auto_solutions" in st.session_state and st.session_state.auto_solutions:
+                    for idx, sol in enumerate(st.session_state.auto_solutions):
+                        # שינוי היחס ל-[1, 12] נותן לטקסט את הרוב המוחלט של רוחב המסך ומציג אותו מלא!
+                        col1, col2 = st.columns([1, 12])
+                        with col1:
+                            excel_data = generate_excel_download(sol, group_students)
+                            st.download_button(
+                                label="⬇️ אקסל",
+                                data=excel_data,
+                                file_name=f"סדר_הופעות_אופציה_{idx + 1}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=f"download_auto_{idx}"
+                            )
+                        with col2:
+                            st.markdown(
+                                f"""
+                                <div dir="rtl" style="
+                                    width: 100%;
+                                    overflow-x: auto;
+                                    white-space: nowrap;
+                                    border: 1px solid #ddd;
+                                    padding: 10px;
+                                    border-radius: 6px;
+                                    background-color: #f6f8fa;
+                                    font-family: system-ui, -apple-system, sans-serif;
+                                    font-size: 15px;
+                                    font-weight: bold;
+                                ">
+                                    {" ⬅️ ".join(sol)}
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
 
             # --- טאב 3: שיבוץ ידני חכם ---
             with tab_manual:
@@ -539,13 +478,13 @@ if uploaded_file is not None:
                         chosen_dance = st.selectbox("בחר את הריקוד הבא להוספה:", options=final_options_to_show, key="next_dance_select")
 
                         if chosen_dance in invalid_by_gap:
-                            st.warning(f"שים לב: הריקוד '{chosen_dance}' מפר את אילוץ המרווח שהגדרת! (רקדניות מסוימות לא יקבלו מספיק מנוחה).")
+                            st.warning(f"שים לב: הריקוד '{chosen_dance}' מפר את אילוץ המרווח שהגדרת!")
 
                         if st.button("➕ הוסף לסדר ההופעות"):
                             st.session_state.manual_order.append(chosen_dance)
                             st.rerun()
                     else:
-                        st.error("😭 אין קבוצות זמינות העומדות באילוצי המרווח! סמן את התיבה למעלה לעקיפת האילוצים והצגת קבוצות אסורות.")
+                        st.error("😭 אין קבוצות זמינות העומדות באילוצי המרווח!")
                 else:
                     st.success("🎉 כל הריקודים שובצו בהצלחה בסדר המופע!")
 
