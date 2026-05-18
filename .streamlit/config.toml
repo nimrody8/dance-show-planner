@@ -1,5 +1,12 @@
 [server]
 maxUploadSize = 50
+fileWatcherType = "none"
+enableCORS = false
+enableXsrfProtection = false
 
 [theme]
 base="light"
+
+[client]
+# מונע קריסה ואיטיות של הדפדפן כשיש הרבה מידע שמודפס למסך
+showErrorDetails = false
