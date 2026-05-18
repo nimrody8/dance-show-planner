@@ -6,57 +6,27 @@ import json
 # הגדרת תצורת עמוד - תמיכה ב-RTL לעברית
 st.set_page_config(page_title="מנהל סדר הופעות - אולפן למחול", layout="wide", initial_sidebar_state="expanded")
 
-# יצירת סגנון עיצוב בסיסי לעברית וישור לימין
+# ⚡ CSS אופטימלי וממוקד - ללא סלקטורים גלובליים שקופאים את הדפדפן
 st.markdown("""
 <style>
-html, body, [class*="css"]  {
+/* החלת RTL על הבלוקים המרכזיים בלבד */
+.stApp, [data-testid="stSidebar"], .stTabs {
     direction: rtl;
     text-align: right;
 }
-.reportview-container .main .block-container {
-    direction: rtl;
-    text-align: right;
-}
+/* יישור טבלאות */
 table {
     width: 100% !important;
+    direction: rtl;
 }
+thead tr th, tbody tr td {
+    text-align: right !important;
+}
+/* מתיחה מלאה של קונטיינר האפליקציה */
 .block-container {
     max-width: 100% !important;
     padding-left: 2rem;
     padding-right: 2rem;
-}
-section[data-testid="stSidebar"] {
-    direction: rtl;
-    text-align: right;
-}
-h1, h2, h3, h4, h5, h6, p, label, span {
-    direction: rtl !important;
-    text-align: right !important;
-}
-div[data-baseweb="select"] {
-    direction: rtl;
-    text-align: right;
-}
-input {
-    direction: rtl;
-    text-align: right;
-}
-button {
-    direction: rtl;
-    text-align: right;
-}
-thead tr th {
-    text-align: right !important;
-}
-tbody tr td {
-    text-align: right !important;
-}
-pre, code {
-    direction: rtl !important;
-    text-align: right !important;
-}
-div[style*="overflow-x"] {
-    direction: rtl;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -68,6 +38,8 @@ if 'manual_order' not in st.session_state:
     st.session_state.manual_order = []
 if 'loaded_configs' not in st.session_state:
     st.session_state.loaded_configs = {}
+if 'auto_solutions' not in st.session_state:
+    st.session_state.auto_solutions = []
 
 # --- פונקציות עזר ללוגיקה ושמירת מצב ---
 def validate_excel(df):
@@ -76,7 +48,6 @@ def validate_excel(df):
     return missing_cols
 
 def serialize_state():
-    """אוסף את כל הנתונים מהווידג'טים והמערך ושומר לקובץ JSON"""
     current_fixed = {}
     num_fixed = st.session_state.get("num_fixed_input", 0)
     for i in range(num_fixed):
@@ -97,13 +68,12 @@ def serialize_state():
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 def load_state_callback():
-    """קריאת קובץ ה-JSON בצורה בטוחה לתוך מילון אחסון זמני כדי למנוע לולאות Rerun"""
     if st.session_state.load_state_file is not None:
         try:
             data = json.load(st.session_state.load_state_file)
             st.session_state.loaded_configs = data
             st.session_state.manual_order = data.get("manual_order", [])
-            st.toast("✅ נתוני הקובץ הועלו! ההגדרות מעודכנות בסרגל הצד.", icon="💾")
+            st.toast("✅ נתוני הקובץ הועלו בהצלחה!", icon="💾")
         except Exception as e:
             st.sidebar.error(f"שגיאה בקריאת קובץ המצב: {e}")
 
@@ -198,12 +168,11 @@ def generate_excel_download(order, group_students):
     return buffer.getvalue()
 
 
-# --- סרגל צדדי (Sidebar) להגדרות והעלאת קובץ ---
+# --- סרגל צדדי (Sidebar) ---
 st.sidebar.header("⚙️ הגדרות והעלאת נתונים")
 
 uploaded_file = st.sidebar.file_uploader("העלאת קובץ אקסל (XLSX)", type=["xlsx"])
 
-# שליפת ערכים שנטענו מהקובץ (אם קיימים) בצורה בטוחה
 saved_cfg = st.session_state.loaded_configs
 default_gap = saved_cfg.get("gap_size", 2)
 default_max_sol = saved_cfg.get("max_solutions", 100)
@@ -213,7 +182,6 @@ max_solutions = st.sidebar.number_input("מספר פתרונות מקסימלי 
 
 st.sidebar.subheader("💾 שמירה וטעינה")
 
-# כפתור הורדת הסטייט הנוכחי
 st.sidebar.download_button(
     label="📥 שמור מצב מלא",
     data=serialize_state(),
@@ -221,7 +189,6 @@ st.sidebar.download_button(
     mime="application/json"
 )
 
-# העלאת קובץ הסטייט שמפעיל קולבק ייעודי פעם אחת בלבד
 st.sidebar.file_uploader(
     "📤 טען מצב קודם",
     type=["json"],
@@ -246,7 +213,6 @@ if uploaded_file is not None:
 
             st.sidebar.subheader("🎭 בחירת ריקודים למופע")
 
-            # הגדרת קבוצות ברירת מחדל על בסיס קובץ שנשמר או כל הקבוצות
             saved_selected = saved_cfg.get("selected_groups", all_groups)
             default_selected = [g for g in saved_selected if g in all_groups] if saved_selected else all_groups
 
@@ -287,7 +253,6 @@ if uploaded_file is not None:
             for i in range(num_fixed):
                 col1, col2 = st.sidebar.columns(2)
                 
-                # שליפת ערך קודם עבור האינדקס הנוכחי אם קיים בקובץ השמור
                 saved_pos_key = list(saved_fixed_positions.keys())[i] if i < len(saved_fixed_positions) else None
                 saved_group_val = saved_fixed_positions[saved_pos_key] if saved_pos_key else active_groups[0]
                 saved_pos_val = int(saved_pos_key) + 1 if saved_pos_key else i + 1
@@ -319,8 +284,6 @@ if uploaded_file is not None:
                     st.sidebar.error(f"❌ קונפליקט: הקבוצה '{fixed_first}' משובצת במקום הראשון, אך אינה ברשימת הפתיחה.")
                     st.session_state.invalid_fixed = True
 
-            current_config = (tuple(start_groups), tuple(end_groups), tuple(sorted(fixed_positions.items())), gap_size)
-
             # טאבים לחלוקת התצוגה
             tab_report, tab_auto, tab_manual = st.tabs([
                 "📊 דוח חפיפות ונתונים",
@@ -328,7 +291,7 @@ if uploaded_file is not None:
                 "✍️ אופציה 2: שיבוץ ידני חכם"
             ])
 
-            # --- טאב 1: דוח חפיפות (מסונן דינמית) ---
+            # --- טאב 1 ---
             with tab_report:
                 st.subheader("ריקודים שלא יכולים להיות חופפים (חולקים רקדניות):")
                 conflict_data = []
@@ -350,7 +313,7 @@ if uploaded_file is not None:
                 else:
                     st.write("אין אף חפיפה בין הקבוצות שנבחרו!")
 
-            # --- טאב 2: גנרציה אוטומטית (תיקון רוחב העמודה ומתיחה מלאה) ---
+            # --- טאב 2 ---
             with tab_auto:
                 st.subheader("ייצור אוטומטי של סדרי עלייה אפשריים")
                 st.write("האלגוריתם ינסה למצוא סידורים שעומדים בכל האילוצים שהגדרת.")
@@ -386,9 +349,8 @@ if uploaded_file is not None:
                             st.session_state.auto_solutions = []
                             st.error("❌ לא נמצא סדר חוקי שמקיים את כל התנאים...")
 
-                if "auto_solutions" in st.session_state and st.session_state.auto_solutions:
+                if st.session_state.auto_solutions:
                     for idx, sol in enumerate(st.session_state.auto_solutions):
-                        # שינוי היחס ל-[1, 12] נותן לטקסט את הרוב המוחלט של רוחב המסך ומציג אותו מלא!
                         col1, col2 = st.columns([1, 12])
                         with col1:
                             excel_data = generate_excel_download(sol, group_students)
@@ -420,7 +382,7 @@ if uploaded_file is not None:
                                 unsafe_allow_html=True
                             )
 
-            # --- טאב 3: שיבוץ ידני חכם ---
+            # --- טאב 3 ---
             with tab_manual:
                 st.subheader("בניית סדר הופעות אינטראקטיבי")
 
