@@ -210,53 +210,69 @@ if uploaded_file is not None:
             max_solutions = st.sidebar.number_input("מספר פתרונות מקסימלי להצגה", min_value=1, max_value=500, key='k_max_sol', value=100 if 'k_max_sol' not in st.session_state else None)
 
             # --- עיצוב מיוחד להרחבת התיבות והחלון ---
+            # --- הגדרות עיצוב לבועה ולרשימת התגים בסיידבר ---
             st.markdown("""
             <style>
-            /* הגדלת גובה רשימת הבחירה המרובה בתוך החלון כדי שלא תידחס */
+            /* הגדלת גובה רשימת הבחירה המרובה בתוך החלון הקופץ */
             div[data-baseweb="select"] ul {
-                max-height: 400px !important; 
+                max-height: 380px !important; 
             }
-            /* הרחבת תיבת הבועה עצמה שתתפרס על המסך */
+            /* הרחבת תיבת הבועה עצמה במרכז המסך */
             div[data-testid="stDialog"] div[role="dialog"] {
-                width: 80vw !important;
-                max-width: 900px !important;
+                width: 75vw !important;
+                max-width: 850px !important;
+            }
+            /* עיצוב תגים יפה ונקי להצגת הקבוצות הנבחרות בסיידבר */
+            .sidebar-tag {
+                display: inline-block;
+                background-color: #ffeef0;
+                color: #d1345b;
+                border: 1px solid #fbc2cc;
+                padding: 4px 10px;
+                border-radius: 12px;
+                margin: 3px;
+                font-size: 13px;
+                font-weight: bold;
             }
             </style>
             """, unsafe_allow_html=True)
 
             st.sidebar.subheader("🎭 בחירת ריקודים למופע")
 
-            # הגדרת פונקציית הבועה (Dialog)
+            # וידוא הגדרת ערך ראשוני ב-Session State
+            if 'k_sel' not in st.session_state: 
+                st.session_state['k_sel'] = all_groups
+
+            # הגדרת פונקציית הבועה (Dialog) המרכזית
             @st.dialog("עריכת קבוצות משתתפות במופע 🩰", width="large")
             def edit_groups_dialog():
-                st.write("סמן או הסר את הקבוצות שברצונך שישתתפו במופע השנה. בסיום לחץ על '✅ שמור ועדכן'.")
+                st.write("סמן או הסר את הקבוצות שישתתפו השנה במופע. בסיום לחץ על '✅ שמור ועדכן'.")
                 
-                # תיבת הבחירה הרחבה בתוך הבועה, מחוברת לאותו מפתח זיכרון k_sel
+                # תיבת הבחירה המרובה הרחבה - עכשיו בתוך הבועה בלבד
                 st.multiselect(
                     "רשימת כל הקבוצות שנמצאו באקסל:",
                     options=all_groups,
                     key='k_sel'
                 )
                 
-                col_save, _ = st.columns([1, 4])
+                col_save, _ = st.columns([1.5, 4])
                 with col_save:
                     if st.button("✅ שמור ועדכן", use_container_width=True):
                         st.rerun()
 
-            # וידוא שיש ערך ראשוני בזיכרון
-            if 'k_sel' not in st.session_state: 
-                st.session_state['k_sel'] = all_groups
-
-            # כפתור לפתיחת הבועה הגדולה
-            if st.sidebar.button("🔍 הרחב וערוך קבוצות בחלון גדול", use_container_width=True):
+            # כפתור מעוצב בסיידבר שפותח את הבועה
+            if st.sidebar.button("🔍 הרחב וערוך קבוצות בחלון גדול", use_container_width=True, type="primary"):
                 edit_groups_dialog()
 
-            # שמירה על המשתנים המקוריים ששאר הקוד שלך תלוי בהם
+            # הגדרת המשתנים ששאר הקוד באפליקציה תלוי בהם
             selected_groups = st.session_state['k_sel']
             active_groups = selected_groups if selected_groups else all_groups
-            
-            # כיתוב קטן מתחת לכפתור שמראה כמה קבוצות נבחרו כרגע
-            st.sidebar.caption(f"📋 נבחרו {len(active_groups)} קבוצות מתוך {len(all_groups)}")
+
+            # הצגת רשימה אלגנטית, קריאה וקומפקטית של הקבוצות שנבחרו כרגע בסיידבר
+            st.sidebar.write(f"**קבוצות משתתפות ({len(active_groups)}):**")
+            tags_html = "".join([f'<span class="sidebar-tag">{g}</span>' for g in active_groups])
+            st.sidebar.markdown(f'<div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 8px; background: #fafafa;">{tags_html}</div>', unsafe_allow_html=True)
+            st.sidebar.markdown("---")
 
             st.sidebar.subheader("🎯 אילוצי קבוצות מיוחדות")
             start_groups = st.sidebar.multiselect("קבוצות שחייבות לפתוח את המופע:", options=active_groups, key='k_starts')
